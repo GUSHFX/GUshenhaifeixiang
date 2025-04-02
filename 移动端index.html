@@ -9,6 +9,8 @@
     <!-- 引入jsPDF库用于PDF导出 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- 添加html2canvas库用于解决中文问题 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         /* 全局样式 */
         * {
@@ -735,7 +737,8 @@
             });
             
             // 添加总计行
-            summaryData.push(['', '', '', '总计:', calculateGrandTotal().toFixed(2)]);
+            summaryData.push([
+                '', '', '', '总计:', calculateGrandTotal().toFixed(2)]);
             
             const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
             XLSX.utils.book_append_sheet(wb, summaryWs, "汇总报价");
@@ -747,226 +750,147 @@
         
         // 导出为PDF
         function exportToPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF({
-                orientation: 'portrait',
-                unit: 'mm'
-            });
-            
-            // 设置文档信息
-            const dateStr = document.getElementById('quote-date').value;
-            doc.setProperties({
-                title: `GU深海飞象报价单_${dateStr}`,
-                subject: '深海飞象产品报价',
-                author: 'GU深海飞象',
-                keywords: '深海飞象,报价,价格单',
-                creator: 'GU深海飞象报价系统'
-            });
-            
-            // 添加标题
-            doc.setFontSize(18);
-            doc.setTextColor(40);
-            doc.setFont('helvetica', 'bold');
-            doc.text('GU深海飞象报价单', 105, 15, { align: 'center' });
-            
-            doc.setFontSize(12);
-            doc.text(`日期: ${dateStr}`, 15, 25);
-            
-            // 设置表格样式
-            const styles = {
-                headStyles: {
-                    fillColor: [10, 61, 98],
-                    textColor: 255,
-                    fontStyle: 'bold'
-                },
-                alternateRowStyles: {
-                    fillColor: [240, 240, 240]
-                },
-                columnStyles: {
-                    0: { cellWidth: 40 },
-                    1: { cellWidth: 50 },
-                    2: { cellWidth: 25 },
-                    3: { cellWidth: 30 },
-                    4: { cellWidth: 30 }
-                },
-                margin: { top: 30 }
-            };
-            
-            let startY = 35;
-            const sections = [
-                { id: 'fish', name: '鱼类报价' },
-                { id: 'shrimp', name: '虾类报价' },
-                { id: 'crab', name: '蟹类报价' },
-                { id: 'shellfish', name: '贝类报价' },
-                { id: 'sashimi', name: '刺身报价' }
-            ];
-            
-            // 添加每个分类的表格
-            sections.forEach((section, index) => {
-                if(index > 0 && startY > 250) {
-                    doc.addPage();
-                    startY = 20;
-                }
+            try {
+                // 更新汇总数据
+                updateSummary();
                 
-                const table = document.getElementById(`${section.id}-body`);
-                const rows = table.querySelectorAll('tr');
-                const data = [];
+                // 创建打印区域
+                const printArea = document.createElement('div');
+                printArea.id = 'pdf-print-area';
+                printArea.style.position = 'absolute';
+                printArea.style.left = '-9999px';
+                printArea.style.width = '210mm';
+                printArea.style.padding = '20mm';
+                printArea.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                printArea.style.backgroundColor = '#fff';
+                printArea.style.color = '#000';
+                document.body.appendChild(printArea);
+        
+                // 添加标题和日期
+                const dateStr = document.getElementById('quote-date').value;
+                printArea.innerHTML = `
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #0a3d62; font-size: 28px; margin-bottom: 10px; font-family: 'Microsoft YaHei', sans-serif;">GU深海飞象报价单</h1>
+                        <p style="color: #555; font-size: 14px; font-family: 'Microsoft YaHei', sans-serif;">日期: ${dateStr}</p>
+                        <div style="width: 100%; height: 2px; background: linear-gradient(to right, transparent, #0a3d62, transparent); margin: 15px 0;"></div>
+                    </div>
+                `;
+        
+                // 克隆汇总表格
+                const summaryTable = document.querySelector('.summary-table').cloneNode(true);
+                summaryTable.style.width = '100%';
+                summaryTable.style.borderCollapse = 'collapse';
+                summaryTable.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                summaryTable.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+                summaryTable.style.borderRadius = '5px';
+                summaryTable.style.overflow = 'hidden';
+                summaryTable.style.display = 'table'; // 修复display:block的问题
                 
-                // 添加数据行
-                rows.forEach(row => {
-                    const name = row.querySelector('input[type="text"]').value;
-                    const quantity = row.querySelector('.quantity').value;
-                    const price = row.querySelector('.price').value;
-                    const total = row.querySelector('.total').textContent;
-                    
-                    if(name || quantity || price) {
-                        data.push([
-                            name, 
-                            quantity, 
-                            parseFloat(price).toFixed(2), 
-                            parseFloat(total).toFixed(2)
-                        ]);
+                // 设置表格样式以便在PDF中正确显示
+                const allCells = summaryTable.querySelectorAll('th, td');
+                allCells.forEach(cell => {
+                    cell.style.border = '1px solid #ddd';
+                    cell.style.padding = '10px';
+                    cell.style.textAlign = 'left';
+                    cell.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                    cell.style.color = '#333';
+                });
+                
+                const headerCells = summaryTable.querySelectorAll('th');
+                headerCells.forEach(cell => {
+                    cell.style.backgroundColor = '#0a3d62';
+                    cell.style.color = '#fff';
+                    cell.style.fontWeight = 'bold';
+                    cell.style.textAlign = 'center';
+                });
+                
+                // 设置分类行样式
+                const categoryRows = summaryTable.querySelectorAll('.category');
+                categoryRows.forEach(cell => {
+                    cell.style.backgroundColor = '#f0f7ff';
+                    cell.style.color = '#0a3d62';
+                    cell.style.fontWeight = 'bold';
+                });
+                
+                // 设置小计行样式
+                const totalRows = summaryTable.querySelectorAll('tr');
+                totalRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0 && cells[0].textContent.includes('小计')) {
+                        row.style.backgroundColor = '#f9f9f9';
+                        cells.forEach(cell => {
+                            cell.style.fontWeight = 'bold';
+                            cell.style.borderTop = '2px solid #0a3d62';
+                        });
                     }
                 });
                 
-                // 添加分类标题
-                doc.setFontSize(14);
-                doc.setTextColor(10, 61, 98);
-                doc.text(section.name, 15, startY - 5);
-                
-                // 添加表格
-                if(data.length > 0) {
-                    doc.autoTable({
-                        head: [['品名', '数量', '单价(￥)', '合计(￥)']],
-                        body: data,
-                        startY: startY,
-                        styles: {
-                            headStyles: {
-                                fillColor: [10, 61, 98],
-                                textColor: 255,
-                                fontStyle: 'bold'
-                            },
-                            alternateRowStyles: {
-                                fillColor: [240, 240, 240]
-                            },
-                            columnStyles: {
-                                0: { cellWidth: 60 },
-                                1: { cellWidth: 25 },
-                                2: { cellWidth: 30 },
-                                3: { cellWidth: 30 }
-                            }
-                        }
-                    });
-                    
-                    // 添加小计
-                    const sectionTotal = parseFloat(document.getElementById(`${section.id}-total`).textContent);
-                    doc.setFontSize(12);
-                    doc.setTextColor(40);
-                    doc.text(`小计: ￥${sectionTotal.toFixed(2)}`, 160, doc.lastAutoTable.finalY + 5, { align: 'right' });
-                    
-                    startY = doc.lastAutoTable.finalY + 15;
-                } else {
-                    doc.setFontSize(12);
-                    doc.text('(无数据)', 15, startY);
-                    startY += 10;
-                }
-            });
-            
-            // 添加汇总表格
-            if(startY > 220) {
-                doc.addPage();
-                startY = 20;
-            }
-            
-            doc.setFontSize(14);
-            doc.setTextColor(10, 61, 98);
-            doc.text('汇总报价', 15, startY - 5);
-            
-            updateSummary();
-            const summaryTable = document.getElementById('summary-body');
-            const summaryRows = summaryTable.querySelectorAll('tr');
-            const summaryData = [];
-            
-            summaryRows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                if(cells.length === 1) {
-                    // 分类行
-                    summaryData.push({
-                        content: cells[0].textContent,
-                        styles: { fontStyle: 'bold', textColor: [248, 197, 55], fillColor: [10, 61, 98] }
-                    });
-                } else if(cells.length === 5) {
-                    // 数据行
-                    summaryData.push([
-                        { content: cells[0].textContent, styles: {} },
-                        { content: cells[1].textContent, styles: {} },
-                        { content: cells[2].textContent, styles: {} },
-                        { content: cells[3].textContent, styles: {} },
-                        { content: cells[4].textContent, styles: {} }
-                    ]);
-                } else if(cells.length === 2) {
-                    // 小计行
-                    summaryData.push([
-                        { content: '', styles: {} },
-                        { content: '', styles: {} },
-                        { content: '', styles: {} },
-                        { content: cells[0].textContent, styles: { fontStyle: 'bold' } },
-                        { content: cells[1].textContent, styles: { fontStyle: 'bold' } }
-                    ]);
-                }
-            });
-            
-            // 添加总计行
-            summaryData.push([
-                { content: '', styles: {} },
-                { content: '', styles: {} },
-                { content: '', styles: {} },
-                { content: '总计:', styles: { fontStyle: 'bold' } },
-                { content: calculateGrandTotal().toFixed(2), styles: { fontStyle: 'bold' } }
-            ]);
-            
-            // 转换数据格式以适应autoTable
-            const formattedData = summaryData.map(item => {
-                if(typeof item === 'object' && !Array.isArray(item)) {
-                    return [item];
-                } else {
-                    return item.map(cell => cell.content);
-                }
-            });
-            
-            // 添加汇总表格
-            doc.autoTable({
-                head: [['分类', '品名', '数量', '单价(￥)', '合计(￥)']],
-                body: formattedData,
-                startY: startY,
-                styles: styles,
-                didParseCell: function(data) {
-                    if(summaryData[data.row.index] && !Array.isArray(summaryData[data.row.index])) {
-                        // 分类行
-                        data.cell.colSpan = 5;
-                        data.cell.styles = summaryData[data.row.index].styles;
-                    } else if(Array.isArray(summaryData[data.row.index])) {
-                        // 数据行或小计行
-                        const cellStyle = summaryData[data.row.index][data.column.index].styles;
-                        if(cellStyle) {
-                            data.cell.styles = cellStyle;
+                // 设置交替行颜色
+                const dataRows = summaryTable.querySelectorAll('tr');
+                dataRows.forEach((row, index) => {
+                    if (!row.querySelector('.category') && !row.querySelector('th') && !row.textContent.includes('小计')) {
+                        if (index % 2 === 1) {
+                            row.style.backgroundColor = '#f9f9f9';
                         }
                     }
-                }
-            });
-            
-            // 添加总计
-            doc.setFontSize(16);
-            doc.setTextColor(232, 65, 24);
-            doc.text(`总计金额: ￥${calculateGrandTotal().toFixed(2)}`, 105, doc.internal.pageSize.height - 20, { align: 'center' });
-            
-            // 添加页脚
-            doc.setFontSize(10);
-            doc.setTextColor(150);
-            doc.text('GU深海飞象 - 品质保证', 105, doc.internal.pageSize.height - 10, { align: 'center' });
-            
-            // 保存PDF
-            doc.save(`GU深海飞象报价单_${dateStr}.pdf`);
+                });
+                
+                printArea.appendChild(summaryTable);
+        
+                // 添加总计金额
+                const grandTotal = document.getElementById('grand-total').textContent;
+                const totalDiv = document.createElement('div');
+                totalDiv.style.textAlign = 'right';
+                totalDiv.style.marginTop = '30px';
+                totalDiv.style.padding = '15px';
+                totalDiv.style.backgroundColor = '#f0f7ff';
+                totalDiv.style.borderRadius = '5px';
+                totalDiv.style.borderLeft = '4px solid #0a3d62';
+                totalDiv.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                totalDiv.innerHTML = `<span style="font-size: 16px; color: #333;">总计金额:</span> <strong style="font-size: 20px; color: #e84118;">￥${grandTotal}</strong>`;
+                printArea.appendChild(totalDiv);
+                
+                // 添加页脚
+                const footerDiv = document.createElement('div');
+                footerDiv.style.marginTop = '40px';
+                footerDiv.style.borderTop = '1px solid #eee';
+                footerDiv.style.padding = '15px 0';
+                footerDiv.style.textAlign = 'center';
+                footerDiv.style.color = '#999';
+                footerDiv.style.fontSize = '12px';
+                footerDiv.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                footerDiv.innerHTML = `GU深海飞象 · 线上鲜活海鲜超市 · 联系电话: 189-2376-7347`;
+                printArea.appendChild(footerDiv);
+        
+                // 使用html2canvas将打印区域转换为图像
+                html2canvas(printArea, {
+                    scale: 2, // 提高分辨率
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#fff'
+                }).then(canvas => {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    
+                    // 计算图像尺寸以适应A4页面
+                    const imgWidth = 210; // A4宽度(mm)
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    
+                    // 将图像添加到PDF
+                    const imgData = canvas.toDataURL('image/png');
+                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    
+                    // 保存PDF
+                    pdf.save(`GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`);
+                    
+                    // 清理
+                    document.body.removeChild(printArea);
+                });
+            } catch (error) {
+                console.error('导出PDF失败:', error);
+                alert('导出PDF时出错: ' + error.message);
+            }
         }
     </script>
 </body>
