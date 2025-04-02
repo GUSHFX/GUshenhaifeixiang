@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GU深海飞象报价单</title>
+    <!-- 引入SheetJS库用于Excel导出 -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <!-- 引入jsPDF库用于PDF导出 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- 添加html2canvas库用于解决中文问题 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* 全局样式 */
+        * {
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: url('https://img.freepik.com/free-photo/royal-dining-hall-with-long-table-elegant-chandeliers_1232-4035.jpg') no-repeat center center fixed;
+            background-size: cover;
+            color: #fff;
+        }
+        .overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            min-height: 100vh;
+            padding: 15px;
+        }
+        
+        /* 头部样式 */
+        .header {
+            text-align: center;
+            padding: 15px 0;
+            position: relative;
+        }
+        .header h1 {
+            font-size: 2rem;
+            margin: 0;
+            color: #f8c537;
+            text-shadow: 2px 2px 4px #000;
+        }
+        .date-picker {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #f8c537;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            width: 100%;
+            max-width: 300px;
+        }
+        
+        /* 导航标签 */
+        .tabs {
+            display: flex;
+            overflow-x: auto;
+            white-space: nowrap;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .tab {
+            padding: 10px 20px;
+            margin: 0 3px;
+            background: rgba(10, 61, 98, 0.7);
+            border-radius: 5px 5px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+        .tab.active {
+            background: rgba(232, 65, 24, 0.9);
+            font-weight: bold;
+        }
+        .tab:hover {
+            background: rgba(232, 65, 24, 0.7);
+        }
+        
+        /* 内容区域 */
+        .content-section {
+            display: none;
+            background: rgba(10, 61, 98, 0.8);
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .content-section.active {
+            display: block;
+        }
+        .section-title {
+            border-left: 4px solid #f8c537;
+            padding-left: 8px;
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        
+        /* 报价表格 */
+        .price-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            display: block;
+            overflow-x: auto;
+        }
+        .price-table th {
+            background: rgba(232, 65, 24, 0.7);
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .price-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .price-table input {
+            width: 100%;
+            padding: 6px;
+            border: none;
+            border-radius: 3px;
+            background: rgba(255,255,255,0.9);
+            font-size: 0.9rem;
+        }
+        .price-table .total {
+            font-weight: bold;
+            color: #f8c537;
+        }
+        .delete-btn {
+            background: rgba(232, 65, 24, 0.7);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 4px 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9rem;
+        }
+        .delete-btn:hover {
+            background: rgba(232, 65, 24, 0.9);
+        }
+        .add-row {
+            background: rgba(15, 94, 156, 0.7) !important;
+            color: white;
+            border: none;
+            padding: 8px;
+            cursor: pointer;
+            width: 100%;
+            border-radius: 3px;
+            transition: background 0.3s;
+            font-size: 0.9rem;
+        }
+        .add-row:hover {
+            background: rgba(232, 65, 24, 0.7) !important;
+        }
+        .section-total {
+            text-align: right;
+            font-size: 1.1rem;
+            margin-top: 8px;
+        }
+        .section-total span {
+            color: #f8c537;
+            font-weight: bold;
+        }
+        
+        /* 汇总表格样式 */
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            display: block;
+            overflow-x: auto;
+        }
+        .summary-table th {
+            background: rgba(232, 65, 24, 0.7);
+            padding: 10px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .summary-table td {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .summary-table .category {
+            font-weight: bold;
+            color: #f8c537;
+        }
+        .summary-table .item-name {
+            padding-left: 15px;
+        }
+        
+        /* 导出按钮样式 */
+        .export-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .export-btn {
+            padding: 10px;
+            background: linear-gradient(135deg, #0a3d62, #1e88e5);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+        .export-btn:hover {
+            background: linear-gradient(135deg, #e84118, #f8c537);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .export-btn i {
+            font-size: 1.1em;
+        }
+        .grand-total {
+            text-align: center;
+            font-size: 1.3rem;
+            margin: 15px 0;
+            padding: 12px;
+            background: rgba(232, 65, 24, 0.2);
+            border-radius: 5px;
+            border-left: 4px solid #f8c537;
+        }
+        .grand-total span {
+            color: #f8c537;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        /* 响应式设计 - 小屏幕手机 */
+        @media (max-width: 480px) {
+            body {
+                background: rgba(0, 0, 0, 0.9);
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .tab {
+                padding: 8px 15px;
+                font-size: 0.85rem;
+            }
+            
+            .price-table th, .price-table td {
+                padding: 6px 4px;
+                font-size: 0.85rem;
+            }
+            
+            .price-table input {
+                padding: 5px;
+                font-size: 0.85rem;
+            }
+            
+            .delete-btn {
+                padding: 3px 6px;
+                font-size: 0.85rem;
+            }
+            
+            .section-title {
+                font-size: 1.3rem;
+            }
+            
+            .section-total {
+                font-size: 1rem;
+            }
+            
+            .grand-total {
+                font-size: 1.2rem;
+            }
+            
+            .grand-total span {
+                font-size: 1.4rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay">
+        <div class="header">
+            <h1>GU深海飞象报价单</h1>
+            <input type="date" id="quote-date" class="date-picker">
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="fish">鱼类</div>
+            <div class="tab" data-tab="shrimp">虾类</div>
+            <div class="tab" data-tab="crab">蟹类</div>
+            <div class="tab" data-tab="shellfish">贝类</div>
+            <div class="tab" data-tab="sashimi">刺身</div>
+            <div class="tab" data-tab="summary">汇总</div>
+        </div>
+        
+        <!-- 鱼类报价 -->
+        <div id="fish" class="content-section active">
+            <h2 class="section-title">鱼类报价</h2>
+            <table class="price-table">
+                <thead>
+                    <tr>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="fish-body">
+                    <tr>
+                        <td><input type="text" placeholder="例如: 东星斑"></td>
+                        <td><input type="number" class="quantity" min="1" value="1"></td>
+                        <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                        <td class="total">0.00</td>
+                        <td><button class="delete-btn" onclick="deleteRow(this, 'fish')">删除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row" onclick="addRow('fish')">+ 添加鱼类品种</button>
+            <div class="section-total">鱼类小计: ￥<span id="fish-total">0.00</span></div>
+        </div>
+        
+        <!-- 虾类报价 -->
+        <div id="shrimp" class="content-section">
+            <h2 class="section-title">虾类报价</h2>
+            <table class="price-table">
+                <thead>
+                    <tr>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="shrimp-body">
+                    <tr>
+                        <td><input type="text" placeholder="例如: 牡丹虾"></td>
+                        <td><input type="number" class="quantity" min="1" value="1"></td>
+                        <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                        <td class="total">0.00</td>
+                        <td><button class="delete-btn" onclick="deleteRow(this, 'shrimp')">删除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row" onclick="addRow('shrimp')">+ 添加虾类品种</button>
+            <div class="section-total">虾类小计: ￥<span id="shrimp-total">0.00</span></div>
+        </div>
+        
+        <!-- 蟹类报价 -->
+        <div id="crab" class="content-section">
+            <h2 class="section-title">蟹类报价</h2>
+            <table class="price-table">
+                <thead>
+                    <tr>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="crab-body">
+                    <tr>
+                        <td><input type="text" placeholder="例如: 帝王蟹"></td>
+                        <td><input type="number" class="quantity" min="1" value="1"></td>
+                        <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                        <td class="total">0.00</td>
+                        <td><button class="delete-btn" onclick="deleteRow(this, 'crab')">删除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row" onclick="addRow('crab')">+ 添加蟹类品种</button>
+            <div class="section-total">蟹类小计: ￥<span id="crab-total">0.00</span></div>
+        </div>
+        
+        <!-- 贝类报价 -->
+        <div id="shellfish" class="content-section">
+            <h2 class="section-title">贝类报价</h2>
+            <table class="price-table">
+                <thead>
+                    <tr>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="shellfish-body">
+                    <tr>
+                        <td><input type="text" placeholder="例如: 澳洲鲍鱼"></td>
+                        <td><input type="number" class="quantity" min="1" value="1"></td>
+                        <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                        <td class="total">0.00</td>
+                        <td><button class="delete-btn" onclick="deleteRow(this, 'shellfish')">删除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row" onclick="addRow('shellfish')">+ 添加贝类品种</button>
+            <div class="section-total">贝类小计: ￥<span id="shellfish-total">0.00</span></div>
+        </div>
+        
+        <!-- 刺身报价 -->
+        <div id="sashimi" class="content-section">
+            <h2 class="section-title">刺身报价</h2>
+            <table class="price-table">
+                <thead>
+                    <tr>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="sashimi-body">
+                    <tr>
+                        <td><input type="text" placeholder="例如: 蓝鳍金枪鱼"></td>
+                        <td><input type="number" class="quantity" min="1" value="1"></td>
+                        <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                        <td class="total">0.00</td>
+                        <td><button class="delete-btn" onclick="deleteRow(this, 'sashimi')">删除</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-row" onclick="addRow('sashimi')">+ 添加刺身品种</button>
+            <div class="section-total">刺身小计: ￥<span id="sashimi-total">0.00</span></div>
+        </div>
+        
+        <!-- 汇总报价 -->
+        <div id="summary" class="content-section">
+            <h2 class="section-title">汇总报价</h2>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>分类</th>
+                        <th>品名</th>
+                        <th>数量</th>
+                        <th>单价(￥)</th>
+                        <th>合计(￥)</th>
+                    </tr>
+                </thead>
+                <tbody id="summary-body">
+                    <!-- 动态生成汇总内容 -->
+                </tbody>
+            </table>
+            <div class="section-total">总计金额: ￥<span id="summary-grand-total">0.00</span></div>
+        </div>
+        
+        <div class="export-buttons">
+            <button class="export-btn" onclick="exportToExcel()">
+                <i>📊</i> 导出Excel
+            </button>
+            <button class="export-btn" onclick="exportToPDF()">
+                <i>📄</i> 导出PDF
+            </button>
+        </div>
+        
+        <div class="grand-total">
+            总计金额: ￥<span id="grand-total">0.00</span>
+        </div>
+    </div>
+
+    <script>
+        // 设置默认日期为今天
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('quote-date').value = today;
+            
+            // 初始化标签切换功能
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // 移除所有active类
+                    tabs.forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.content-section').forEach(section => {
+                        section.classList.remove('active');
+                    });
+                    
+                    // 添加active类到当前标签和对应内容
+                    this.classList.add('active');
+                    const tabId = this.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                    
+                    // 如果是汇总标签，则更新汇总数据
+                    if(tabId === 'summary') {
+                        updateSummary();
+                    }
+                });
+            });
+            
+            // 为所有现有的输入框添加事件监听
+            initInputEvents();
+        });
+        
+        // 添加新行
+        function addRow(section) {
+            const tbody = document.getElementById(`${section}-body`);
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td><input type="text" placeholder="请输入品名"></td>
+                <td><input type="number" class="quantity" min="1" value="1"></td>
+                <td><input type="number" class="price" min="0" step="0.01" placeholder="0.00"></td>
+                <td class="total">0.00</td>
+                <td><button class="delete-btn" onclick="deleteRow(this, '${section}')">删除</button></td>
+            `;
+            tbody.appendChild(newRow);
+            
+            // 为新添加的输入框添加事件监听
+            const inputs = newRow.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('input', function() {
+                    calculateRow(this.closest('tr'));
+                    calculateSectionTotal(section);
+                    calculateGrandTotal();
+                });
+            });
+        }
+        
+        // 删除行
+        function deleteRow(button, section) {
+            const row = button.closest('tr');
+            row.remove();
+            calculateSectionTotal(section);
+            calculateGrandTotal();
+            
+            // 如果删除后表格为空，添加一个空行
+            const tbody = document.getElementById(`${section}-body`);
+            if(tbody.querySelectorAll('tr').length === 0) {
+                addRow(section);
+            }
+        }
+        
+        // 初始化输入事件
+        function initInputEvents() {
+            document.querySelectorAll('.price-table input').forEach(input => {
+                input.addEventListener('input', function() {
+                    calculateRow(this.closest('tr'));
+                    const section = this.closest('.content-section').id;
+                    calculateSectionTotal(section);
+                    calculateGrandTotal();
+                });
+            });
+        }
+        
+        // 计算单行合计
+        function calculateRow(row) {
+            const quantity = parseFloat(row.querySelector('.quantity').value) || 0;
+            const price = parseFloat(row.querySelector('.price').value) || 0;
+            const total = (quantity * price).toFixed(2);
+            row.querySelector('.total').textContent = total;
+        }
+        
+        // 计算分区小计
+        function calculateSectionTotal(section) {
+            const rows = document.querySelectorAll(`#${section}-body tr`);
+            let sectionTotal = 0;
+            
+            rows.forEach(row => {
+                const total = parseFloat(row.querySelector('.total').textContent) || 0;
+                sectionTotal += total;
+            });
+            
+            document.getElementById(`${section}-total`).textContent = sectionTotal.toFixed(2);
+            document.getElementById('grand-total').textContent = calculateGrandTotal().toFixed(2);
+        }
+        
+        // 计算所有分类的总计
+        function calculateGrandTotal() {
+            let total = 0;
+            const sections = ['fish', 'shrimp', 'crab', 'shellfish', 'sashimi'];
+            
+            sections.forEach(section => {
+                const sectionTotal = parseFloat(document.getElementById(`${section}-total`).textContent) || 0;
+                total += sectionTotal;
+            });
+            
+            document.getElementById('grand-total').textContent = total.toFixed(2);
+            document.getElementById('summary-grand-total').textContent = total.toFixed(2);
+            return total;
+        }
+        
+        // 更新汇总数据
+        function updateSummary() {
+            const summaryBody = document.getElementById('summary-body');
+            summaryBody.innerHTML = '';
+            
+            const sections = [
+                { id: 'fish', name: '鱼类' },
+                { id: 'shrimp', name: '虾类' },
+                { id: 'crab', name: '蟹类' },
+                { id: 'shellfish', name: '贝类' },
+                { id: 'sashimi', name: '刺身' }
+            ];
+            
+            let hasData = false;
+            
+            sections.forEach(section => {
+                const table = document.getElementById(`${section.id}-body`);
+                const rows = table.querySelectorAll('tr');
+                let sectionHasData = false;
+                
+                rows.forEach(row => {
+                    const name = row.querySelector('input[type="text"]').value;
+                    const quantity = row.querySelector('.quantity').value;
+                    const price = row.querySelector('.price').value;
+                    const total = row.querySelector('.total').textContent;
+                    
+                    if(name || quantity || price) {
+                        if(!sectionHasData) {
+                            // 添加分类行
+                            const categoryRow = document.createElement('tr');
+                            categoryRow.innerHTML = `
+                                <td class="category" colspan="5">${section.name}</td>
+                            `;
+                            summaryBody.appendChild(categoryRow);
+                            sectionHasData = true;
+                            hasData = true;
+                        }
+                        
+                        // 添加数据行
+                        const dataRow = document.createElement('tr');
+                        dataRow.innerHTML = `
+                            <td></td>
+                            <td class="item-name">${name || '-'}</td>
+                            <td>${quantity || '0'}</td>
+                            <td>${price ? parseFloat(price).toFixed(2) : '0.00'}</td>
+                            <td>${total || '0.00'}</td>
+                        `;
+                        summaryBody.appendChild(dataRow);
+                    }
+                });
+                
+                if(sectionHasData) {
+                    // 添加小计行
+                    const sectionTotal = parseFloat(document.getElementById(`${section.id}-total`).textContent) || 0;
+                    const totalRow = document.createElement('tr');
+                    totalRow.innerHTML = `
+                        <td colspan="4" style="text-align: right;">${section.name}小计:</td>
+                        <td>${sectionTotal.toFixed(2)}</td>
+                    `;
+                    summaryBody.appendChild(totalRow);
+                }
+            });
+            
+            if(!hasData) {
+                summaryBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">暂无数据</td></tr>';
+            }
+        }
+        
+        // 导出为Excel
+        function exportToExcel() {
+            // 创建工作簿
+            const wb = XLSX.utils.book_new();
+            const sections = ['fish', 'shrimp', 'crab', 'shellfish', 'sashimi'];
+            const sectionNames = {
+                'fish': '鱼类报价', 
+                'shrimp': '虾类报价',
+                'crab': '蟹类报价',
+                'shellfish': '贝类报价',
+                'sashimi': '刺身报价'
+            };
+            
+            // 为每个分类创建工作表
+            sections.forEach(section => {
+                const table = document.getElementById(`${section}-body`);
+                const rows = table.querySelectorAll('tr');
+                const data = [];
+                
+                // 添加表头
+                data.push(['品名', '数量', '单价(￥)', '合计(￥)']);
+                
+                // 添加数据行
+                rows.forEach(row => {
+                    const name = row.querySelector('input[type="text"]').value;
+                    const quantity = row.querySelector('.quantity').value;
+                    const price = row.querySelector('.price').value;
+                    const total = row.querySelector('.total').textContent;
+                    
+                    if(name || quantity || price) {
+                        data.push([name, quantity, parseFloat(price), parseFloat(total)]);
+                    }
+                });
+                
+                // 添加小计行
+                const sectionTotal = parseFloat(document.getElementById(`${section}-total`).textContent);
+                data.push(['', '', '小计:', sectionTotal]);
+                
+                // 创建工作表
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                XLSX.utils.book_append_sheet(wb, ws, sectionNames[section]);
+            });
+            
+            // 添加汇总表
+            updateSummary();
+            const summaryTable = document.getElementById('summary-body');
+            const summaryRows = summaryTable.querySelectorAll('tr');
+            const summaryData = [['分类', '品名', '数量', '单价(￥)', '合计(￥)']];
+            
+            summaryRows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if(cells.length === 1) {
+                    // 分类行
+                    summaryData.push([cells[0].textContent, '', '', '', '']);
+                } else if(cells.length === 5) {
+                    // 数据行
+                    summaryData.push([
+                        cells[0].textContent,
+                        cells[1].textContent,
+                        cells[2].textContent,
+                        cells[3].textContent,
+                        cells[4].textContent
+                    ]);
+                } else if(cells.length === 4) {
+                    // 小计行 (在汇总表中是5列，这里应该是特殊情况)
+                    summaryData.push([
+                        '', '', cells[0].textContent,
+                        cells[1].textContent, cells[2].textContent
+                    ]);
+                }
+            });
+            
+            // 添加总计行
+            summaryData.push([
+                '', '', '', '总计:', calculateGrandTotal().toFixed(2)]);
+            
+            const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+            XLSX.utils.book_append_sheet(wb, summaryWs, "汇总报价");
+            
+            // 生成Excel文件
+            const dateStr = document.getElementById('quote-date').value.replace(/-/g, '');
+            XLSX.writeFile(wb, `GU深海飞象报价单_${dateStr}.xlsx`);
+        }
+        
+        // 导出为PDF
+        function exportToPDF() {
+            try {
+                // 更新汇总数据
+                updateSummary();
+                
+                // 创建打印区域
+                const printArea = document.createElement('div');
+                printArea.id = 'pdf-print-area';
+                printArea.style.position = 'absolute';
+                printArea.style.left = '-9999px';
+                printArea.style.width = '210mm';
+                printArea.style.padding = '20mm';
+                printArea.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                printArea.style.backgroundColor = '#fff';
+                printArea.style.color = '#000';
+                document.body.appendChild(printArea);
+        
+                // 添加标题和日期
+                const dateStr = document.getElementById('quote-date').value;
+                printArea.innerHTML = `
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #0a3d62; font-size: 28px; margin-bottom: 10px; font-family: 'Microsoft YaHei', sans-serif;">GU深海飞象报价单</h1>
+                        <p style="color: #555; font-size: 14px; font-family: 'Microsoft YaHei', sans-serif;">日期: ${dateStr}</p>
+                        <div style="width: 100%; height: 2px; background: linear-gradient(to right, transparent, #0a3d62, transparent); margin: 15px 0;"></div>
+                    </div>
+                `;
+        
+                // 克隆汇总表格
+                const summaryTable = document.querySelector('.summary-table').cloneNode(true);
+                summaryTable.style.width = '100%';
+                summaryTable.style.borderCollapse = 'collapse';
+                summaryTable.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                summaryTable.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+                summaryTable.style.borderRadius = '5px';
+                summaryTable.style.overflow = 'hidden';
+                summaryTable.style.display = 'table'; // 修复display:block的问题
+                
+                // 设置表格样式以便在PDF中正确显示
+                const allCells = summaryTable.querySelectorAll('th, td');
+                allCells.forEach(cell => {
+                    cell.style.border = '1px solid #ddd';
+                    cell.style.padding = '10px';
+                    cell.style.textAlign = 'left';
+                    cell.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                    cell.style.color = '#333';
+                });
+                
+                const headerCells = summaryTable.querySelectorAll('th');
+                headerCells.forEach(cell => {
+                    cell.style.backgroundColor = '#0a3d62';
+                    cell.style.color = '#fff';
+                    cell.style.fontWeight = 'bold';
+                    cell.style.textAlign = 'center';
+                });
+                
+                // 设置分类行样式
+                const categoryRows = summaryTable.querySelectorAll('.category');
+                categoryRows.forEach(cell => {
+                    cell.style.backgroundColor = '#f0f7ff';
+                    cell.style.color = '#0a3d62';
+                    cell.style.fontWeight = 'bold';
+                });
+                
+                // 设置小计行样式
+                const totalRows = summaryTable.querySelectorAll('tr');
+                totalRows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0 && cells[0].textContent.includes('小计')) {
+                        row.style.backgroundColor = '#f9f9f9';
+                        cells.forEach(cell => {
+                            cell.style.fontWeight = 'bold';
+                            cell.style.borderTop = '2px solid #0a3d62';
+                        });
+                    }
+                });
+                
+                // 设置交替行颜色
+                const dataRows = summaryTable.querySelectorAll('tr');
+                dataRows.forEach((row, index) => {
+                    if (!row.querySelector('.category') && !row.querySelector('th') && !row.textContent.includes('小计')) {
+                        if (index % 2 === 1) {
+                            row.style.backgroundColor = '#f9f9f9';
+                        }
+                    }
+                });
+                
+                printArea.appendChild(summaryTable);
+        
+                // 添加总计金额
+                const grandTotal = document.getElementById('grand-total').textContent;
+                const totalDiv = document.createElement('div');
+                totalDiv.style.textAlign = 'right';
+                totalDiv.style.marginTop = '30px';
+                totalDiv.style.padding = '15px';
+                totalDiv.style.backgroundColor = '#f0f7ff';
+                totalDiv.style.borderRadius = '5px';
+                totalDiv.style.borderLeft = '4px solid #0a3d62';
+                totalDiv.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                totalDiv.innerHTML = `<span style="font-size: 16px; color: #333;">总计金额:</span> <strong style="font-size: 20px; color: #e84118;">￥${grandTotal}</strong>`;
+                printArea.appendChild(totalDiv);
+                
+                // 添加页脚
+                const footerDiv = document.createElement('div');
+                footerDiv.style.marginTop = '40px';
+                footerDiv.style.borderTop = '1px solid #eee';
+                footerDiv.style.padding = '15px 0';
+                footerDiv.style.textAlign = 'center';
+                footerDiv.style.color = '#999';
+                footerDiv.style.fontSize = '12px';
+                footerDiv.style.fontFamily = "'Microsoft YaHei', sans-serif";
+                footerDiv.innerHTML = `GU深海飞象 · 线上鲜活海鲜超市 · 联系电话: 189-2376-7347`;
+                printArea.appendChild(footerDiv);
+        
+                // 使用html2canvas将打印区域转换为图像
+                html2canvas(printArea, {
+                    scale: 2, // 提高分辨率
+                    logging: false,
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: '#fff'
+                }).then(canvas => {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    
+                    // 计算图像尺寸以适应A4页面
+                    const imgWidth = 210; // A4宽度(mm)
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    
+                    // 将图像添加到PDF
+                    const imgData = canvas.toDataURL('image/png');
+                    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                    
+                    // 检测是否为安卓设备
+                    const isAndroid = /Android/i.test(navigator.userAgent);
+                    
+                    if (isAndroid) {
+                        // 安卓设备：创建一个Blob并使用data URL方式提供下载
+                        const pdfBlob = pdf.output('blob');
+                        const blobUrl = URL.createObjectURL(pdfBlob);
+                        
+                        // 创建一个隐藏的iframe来处理下载
+                        const iframe = document.createElement('iframe');
+                        iframe.style.display = 'none';
+                        document.body.appendChild(iframe);
+                        
+                        try {
+                            // 尝试在iframe中打开PDF
+                            iframe.src = blobUrl;
+                            
+                            // 创建一个下载链接并模拟点击
+                            const downloadLink = document.createElement('a');
+                            downloadLink.href = blobUrl;
+                            downloadLink.download = `GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`;
+                            downloadLink.style.display = 'none';
+                            document.body.appendChild(downloadLink);
+                            
+                            // 延迟点击以确保blob已准备好
+                            setTimeout(() => {
+                                downloadLink.click();
+                                // 清理资源
+                                document.body.removeChild(downloadLink);
+                                URL.revokeObjectURL(blobUrl);
+                            }, 100);
+                            
+                            // 显示备用下载选项
+                            setTimeout(() => {
+                                const userConfirm = confirm('如果PDF没有自动下载，请点击"确定"使用备用下载方式。');
+                                if (userConfirm) {
+                                    // 打开新窗口显示PDF，用户可以从那里保存
+                                    window.open(blobUrl, '_blank');
+                                }
+                            }, 2000);
+                        } catch (e) {
+                            console.error('下载PDF时出错:', e);
+                            // 备用方法：直接打开新窗口
+                            window.open(blobUrl, '_blank');
+                        }
+                        
+                        // 清理iframe
+                        setTimeout(() => {
+                            document.body.removeChild(iframe);
+                        }, 1000);
+                    } else {
+                        // 非安卓设备：直接保存
+                        pdf.save(`GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`);
+                    }
+                    
+                    // 清理
+                    document.body.removeChild(printArea);
+                });
+            } catch (error) {
+                console.error('导出PDF失败:', error);
+                alert('导出PDF时出错: ' + error.message);
+            }
+        }    </script>
+</body>
+</html>
