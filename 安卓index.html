@@ -885,52 +885,70 @@
                     const isAndroid = /Android/i.test(navigator.userAgent);
                     
                     if (isAndroid) {
-                        // 安卓设备：创建一个Blob并使用data URL方式提供下载
+                        // 安卓设备：使用Blob和Data URL方式
                         const pdfBlob = pdf.output('blob');
                         const blobUrl = URL.createObjectURL(pdfBlob);
                         
-                        // 创建一个隐藏的iframe来处理下载
-                        const iframe = document.createElement('iframe');
-                        iframe.style.display = 'none';
-                        document.body.appendChild(iframe);
+                        // 创建一个下载链接
+                        const downloadLink = document.createElement('a');
+                        downloadLink.href = blobUrl;
+                        downloadLink.download = `GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`;
+                        downloadLink.style.display = 'none';
+                        document.body.appendChild(downloadLink);
                         
-                        try {
-                            // 尝试在iframe中打开PDF
-                            iframe.src = blobUrl;
-                            
-                            // 创建一个下载链接并模拟点击
-                            const downloadLink = document.createElement('a');
-                            downloadLink.href = blobUrl;
-                            downloadLink.download = `GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`;
-                            downloadLink.style.display = 'none';
-                            document.body.appendChild(downloadLink);
-                            
-                            // 延迟点击以确保blob已准备好
-                            setTimeout(() => {
-                                downloadLink.click();
-                                // 清理资源
-                                document.body.removeChild(downloadLink);
-                                URL.revokeObjectURL(blobUrl);
-                            }, 100);
-                            
-                            // 显示备用下载选项
-                            setTimeout(() => {
-                                const userConfirm = confirm('如果PDF没有自动下载，请点击"确定"使用备用下载方式。');
-                                if (userConfirm) {
-                                    // 打开新窗口显示PDF，用户可以从那里保存
-                                    window.open(blobUrl, '_blank');
-                                }
-                            }, 2000);
-                        } catch (e) {
-                            console.error('下载PDF时出错:', e);
-                            // 备用方法：直接打开新窗口
-                            window.open(blobUrl, '_blank');
-                        }
+                        // 显示加载提示
+                        alert('PDF生成完成，正在准备下载...');
                         
-                        // 清理iframe
+                        // 尝试触发下载
+                        downloadLink.click();
+                        
+                        // 提供备用下载选项
                         setTimeout(() => {
-                            document.body.removeChild(iframe);
-                        }, 1000);
+                            const backupDiv = document.createElement('div');
+                            backupDiv.style.position = 'fixed';
+                            backupDiv.style.top = '0';
+                            backupDiv.style.left = '0';
+                            backupDiv.style.width = '100%';
+                            backupDiv.style.height = '100%';
+                            backupDiv.style.backgroundColor = 'rgba(0,0,0,0.8)';
+                            backupDiv.style.zIndex = '9999';
+                            backupDiv.style.display = 'flex';
+                            backupDiv.style.flexDirection = 'column';
+                            backupDiv.style.alignItems = 'center';
+                            backupDiv.style.justifyContent = 'center';
+                            backupDiv.style.padding = '20px';
+                            backupDiv.style.color = '#fff';
+                            backupDiv.style.textAlign = 'center';
+                            
+                            backupDiv.innerHTML = `
+                                <h3 style="margin-bottom: 20px;">PDF已生成完成</h3>
+                                <p>如果PDF没有自动下载，请点击下方按钮：</p>
+                                <button id="direct-download" style="background: #f8c537; color: #000; border: none; padding: 12px 20px; margin: 15px; border-radius: 5px; font-weight: bold;">直接下载PDF</button>
+                                <button id="open-new-tab" style="background: #0a3d62; color: #fff; border: none; padding: 12px 20px; margin: 15px; border-radius: 5px; font-weight: bold;">在新标签页中打开</button>
+                                <button id="close-popup" style="background: #666; color: #fff; border: none; padding: 8px 15px; margin-top: 20px; border-radius: 5px;">关闭此窗口</button>
+                            `;
+                            
+                            document.body.appendChild(backupDiv);
+                            
+                            // 直接下载按钮
+                            document.getElementById('direct-download').addEventListener('click', function() {
+                                const newLink = document.createElement('a');
+                                newLink.href = blobUrl;
+                                newLink.download = `GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`;
+                                newLink.click();
+                            });
+                            
+                            // 在新标签页中打开
+                            document.getElementById('open-new-tab').addEventListener('click', function() {
+                                window.open(blobUrl, '_blank');
+                            });
+                            
+                            // 关闭弹窗
+                            document.getElementById('close-popup').addEventListener('click', function() {
+                                document.body.removeChild(backupDiv);
+                                URL.revokeObjectURL(blobUrl);
+                            });
+                        }, 2000);
                     } else {
                         // 非安卓设备：直接保存
                         pdf.save(`GU深海飞象报价单_${dateStr.replace(/-/g, '')}.pdf`);
@@ -938,6 +956,9 @@
                     
                     // 清理
                     document.body.removeChild(printArea);
+                }).catch(err => {
+                    console.error('生成PDF图像时出错:', err);
+                    alert('生成PDF图像时出错: ' + err.message);
                 });
             } catch (error) {
                 console.error('导出PDF失败:', error);
